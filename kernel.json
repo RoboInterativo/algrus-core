@@ -1,0 +1,11 @@
+{
+ "argv": [
+  "python",
+  "-m",
+  "algrus-core.kernel",
+  "-f",
+  "{connection_file}"
+ ],
+ "display_name": "Algrus Language",
+ "language": "algrus"
+}
