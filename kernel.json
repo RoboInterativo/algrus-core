@@ -1,8 +1,7 @@
 {
  "argv": [
   "python",
-  "-m",
-  "algrus-core.kernel",
+  "/home/chief9/projects/algrus-core/kernel.py",
   "-f",
   "{connection_file}"
  ],
