@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "algrus-core"
+version = "0.1.0"
+description = "Russian Algorithmic Language — Jupyter kernel and runtime"
+requires-python = ">=3.10"
+dependencies = [
+    "ipykernel>=6.0",
+]
+
+[project.optional-dependencies]
+gui = ["pygame>=2.5"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+algrus = "algrus_core.kernel:main"
+
+[tool.setuptools.packages.find]
+include = ["algrus_core*"]

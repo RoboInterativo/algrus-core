@@ -1,54 +1,41 @@
-# import json
-# import os
-# import sys
-# from jupyter_client.kernelspec import install_kernel_spec
-# from IPython.utils.tempdir import TemporaryDirectory
-#
-# kernel_json = {
-#     "argv": [sys.executable, "-m", "your_language_kernel", "-f", "{connection_file}"],
-#     "display_name": "Your Language",
-#     "language": "your_language",
-# }
-#
-# def install_my_kernel():
-#     with TemporaryDirectory() as td:
-#         with open(os.path.join(td, 'kernel.json'), 'w') as f:
-#             json.dump(kernel_json, f, sort_keys=True)
-#         install_kernel_spec(td, 'your_language', user=True, replace=True)
-#
-# if __name__ == '__main__':
-#     install_my_kernel()
-
+# install.py
 import json
-import os
+import shutil
 import sys
-from jupyter_client.kernelspec import install_kernel_spec
-from IPython.utils.tempdir import TemporaryDirectory
+from pathlib import Path
+
 
 def install_kernel():
-    kernel_json = {
-        "argv": [
-            sys.executable,
-            "-c",
-            """
-import sys
-sys.path.insert(0, '/home/chief9/projects/algrus-core')
-from kernel import YourLanguageKernel
-YourLanguageKernel.launch_instance()
-            """.strip(),
-            "-f",
-            "{connection_file}"
-        ],
-        "display_name": "Algrus Language",
-        "language": "algrus",
-    }
+    """Устанавливает kernelspec для Jupyter."""
+    here = Path(__file__).parent.resolve()
+    source = here / "kernelspec" / "kernel.json"
+    if not source.exists():
+        print(f"❌ Не найден {source}")
+        sys.exit(1)
 
-    with TemporaryDirectory() as td:
-        with open(os.path.join(td, 'kernel.json'), 'w') as f:
-            json.dump(kernel_json, f, sort_keys=True)
+    # куда Jupyter смотрит kernelspec
+    if sys.platform == "win32":
+        base = Path.home() / "AppData" / "Roaming" / "jupyter" / "kernels"
+    else:
+        base = Path.home() / ".local" / "share" / "jupyter" / "kernels"
 
-        install_kernel_spec(td, 'algrus', user=True, replace=True)
-        print("Kernel installed successfully!")
+    target_dir = base / "algrus"
+    target_dir.mkdir(parents=True, exist_ok=True)
 
-if __name__ == '__main__':
+    # копируем kernel.json
+    shutil.copy(source, target_dir / "kernel.json")
+
+    # заменяем "python" на полный путь к venv-python (надёжнее)
+    spec_path = target_dir / "kernel.json"
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec["argv"][0] = sys.executable  # путь к python из venv
+    spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2),
+                         encoding="utf-8")
+
+    print(f"✅ Ядро установлено в {target_dir}")
+    print(f"   Python: {sys.executable}")
+    print("   Перезапустите Jupyter и выберите ядро 'АлгРус'")
+
+
+if __name__ == "__main__":
     install_kernel()

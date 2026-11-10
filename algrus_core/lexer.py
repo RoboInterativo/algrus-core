@@ -20,12 +20,19 @@ class TokenType(Enum):
     КОН_ДЛЯ = 'КОН_ДЛЯ'
     ВЫВОД = 'ВЫВОД'
     ВВОД = 'ВВОД'
+    АРГ = 'АРГ'
+    РЕЗ = 'РЕЗ'
+    НЦ = 'НЦ'
+    КЦ = 'КЦ'
+    ТАБ = 'ТАБ'
 
     # Типы данных
     ЦЕЛ = 'ЦЕЛ'
     ВЕЩ = 'ВЕЩ'
     ЛОГ = 'ЛОГ'
     СИМВ = 'СИМВ'
+    ЛИТ = 'ЛИТ'
+    НАТ = 'НАТ'
 
     # Литералы
     ЧИСЛО = 'ЧИСЛО'
@@ -48,6 +55,7 @@ class TokenType(Enum):
     МЕНЬШЕ = 'МЕНЬШЕ'
     БОЛЬШЕ_РАВНО = 'БОЛЬШЕ_РАВНО'
     МЕНЬШЕ_РАВНО = 'МЕНЬШЕ_РАВНО'
+    СТЕПЕНЬ = 'СТЕПЕНЬ'
     И = 'И'
     ИЛИ = 'ИЛИ'
     НЕ = 'НЕ'
@@ -61,10 +69,29 @@ class TokenType(Enum):
     ДВОЕТОЧИЕ = 'ДВОЕТОЧИЕ'
     СКОБКА_ЛЕВ = 'СКОБКА_ЛЕВ'
     СКОБКА_ПРАВ = 'СКОБКА_ПРАВ'
+    СКОБКА_КВ_ЛЕВ = 'СКОБКА_КВ_ЛЕВ'
+    СКОБКА_КВ_ПРАВ = 'СКОБКА_КВ_ПРАВ'
 
     # Конец строки
     КОНЕЦ_СТРОКИ = 'КОНЕЦ_СТРОКИ'
     КОНЕЦ_ФАЙЛА = 'КОНЕЦ_ФАЙЛА'
+
+# Кириллица и латиница содержат визуально одинаковые буквы (а/a, с/c, х/x...).
+# Для сравнения имён приводим их к одному ключу. Исходное написание при этом
+# сохраняется — им пользуется генератор кода.
+_CONFUSABLES = str.maketrans({
+    'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H',
+    'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+    'а': 'a', 'е': 'e', 'к': 'k', 'м': 'm', 'о': 'o', 'р': 'p',
+    'с': 'c', 'т': 't', 'у': 'y', 'х': 'x',
+    'і': 'i', 'ј': 'j', 'ѕ': 's',
+})
+
+
+def fold_identifier(name):
+    """Ключ для сравнения имён без учёта кириллических/латинских двойников."""
+    return name.translate(_CONFUSABLES)
+
 
 class Token:
     def __init__(self, type, value, line, column):
@@ -106,12 +133,22 @@ class Lexer:
             'КОН_ДЛЯ': TokenType.КОН_ДЛЯ,
             'ВЫВОД': TokenType.ВЫВОД,
             'ВВОД': TokenType.ВВОД,
+            'АРГ': TokenType.АРГ,
+            'РЕЗ': TokenType.РЕЗ,
+            'НЦ': TokenType.НЦ,
+            'КЦ': TokenType.КЦ,
+            'ТАБ': TokenType.ТАБ,
             'ЦЕЛ': TokenType.ЦЕЛ,
             'ВЕЩ': TokenType.ВЕЩ,
             'ЛОГ': TokenType.ЛОГ,
             'СИМВ': TokenType.СИМВ,
+            'ЛИТ': TokenType.ЛИТ,
+            'НАТ': TokenType.НАТ,
             'ИСТИНА': TokenType.ИСТИНА,
-            'ЛОЖЬ': TokenType.ЛОЖЬ
+            'ЛОЖЬ': TokenType.ЛОЖЬ,
+            'И': TokenType.И,
+            'ИЛИ': TokenType.ИЛИ,
+            'НЕ': TokenType.НЕ
         }
 
         # Операторы
@@ -129,7 +166,8 @@ class Lexer:
             'И': TokenType.И,
             'ИЛИ': TokenType.ИЛИ,
             'НЕ': TokenType.НЕ,
-            ':=': TokenType.ПРИСВОИТЬ
+            ':=': TokenType.ПРИСВОИТЬ,
+            '^': TokenType.СТЕПЕНЬ
         }
 
     def error(self, message):
@@ -169,12 +207,19 @@ class Lexer:
 
     def string(self):
         result = ''
+        opener = self.current_char
+        closers = {
+            '"': ('"',),
+            '«': ('»',),
+            '„': ('"', '“'),
+        }[opener]
+
         self.advance()  # Пропускаем открывающую кавычку
-        while self.current_char is not None and self.current_char != '"':
+        while self.current_char is not None and self.current_char not in closers:
             result += self.current_char
             self.advance()
 
-        if self.current_char != '"':
+        if self.current_char is None:
             self.error('Незакрытая строка')
 
         self.advance()  # Пропускаем закрывающую кавычку
@@ -209,18 +254,39 @@ class Lexer:
                 return self.number()
 
             # Строки
-            if self.current_char == '"':
+            if self.current_char in '"«„':
                 return self.string()
 
             # Идентификаторы и ключевые слова
             if self.current_char.isalpha() or self.current_char == '_':
                 return self.identifier()
             # Операторы и присваивание
-            if self.current_char in '+-*/<>=:':  # Включаем двоеточие
+            if self.current_char in '+-*/<>=:≠≤≥^':  # Включаем двоеточие и степень
                 # Сначала проверяем составные операторы
+                if self.current_char == '*' and self.pos + 1 < len(self.text) and self.text[self.pos + 1] == '*':
+                    token = Token(TokenType.СТЕПЕНЬ, '**', self.line, self.column)
+                    self.advance()
+                    self.advance()
+                    return token
+
                 if self.current_char == ':' and self.pos + 1 < len(self.text) and self.text[self.pos + 1] == '=':
                     token = Token(TokenType.ПРИСВОИТЬ, ':=', self.line, self.column)
                     self.advance()
+                    self.advance()
+                    return token
+
+                if self.current_char == '≠':
+                    token = Token(TokenType.НЕ_РАВНО, '≠', self.line, self.column)
+                    self.advance()
+                    return token
+
+                if self.current_char == '≤':
+                    token = Token(TokenType.МЕНЬШЕ_РАВНО, '≤', self.line, self.column)
+                    self.advance()
+                    return token
+
+                if self.current_char == '≥':
+                    token = Token(TokenType.БОЛЬШЕ_РАВНО, '≥', self.line, self.column)
                     self.advance()
                     return token
 
@@ -313,6 +379,16 @@ class Lexer:
 
             if self.current_char == ')':
                 token = Token(TokenType.СКОБКА_ПРАВ, ')', self.line, self.column)
+                self.advance()
+                return token
+
+            if self.current_char == '[':
+                token = Token(TokenType.СКОБКА_КВ_ЛЕВ, '[', self.line, self.column)
+                self.advance()
+                return token
+
+            if self.current_char == ']':
+                token = Token(TokenType.СКОБКА_КВ_ПРАВ, ']', self.line, self.column)
                 self.advance()
                 return token
 

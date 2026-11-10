@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "python",
+    "-m",
+    "algrus_core.kernel",
+    "-f",
+    "{connection_file}"
+  ],
+  "display_name": "АлгРус",
+  "language": "algrus",
+  "metadata": {
+    "debugger": false
+  }
+}
