@@ -1,5 +1,8 @@
 import re
 
+from .lexer import fold_identifier
+from .parser import Variable
+
 
 class PythonCodeGenerator:
     BUILTIN_FUNCTIONS = {
@@ -63,6 +66,13 @@ class PythonCodeGenerator:
 
     def generic_visit(self, node):
         raise Exception(f'No visit method for {type(node).__name__}')
+    def visit_ProcedureCall(self, node):
+        target = self.BUILTIN_FUNCTIONS.get(node.name)
+        if target is None:
+            target = self.sanitize_name(node.name)
+
+        args = ', '.join(self.generate(arg) for arg in node.arguments)
+        self.add_line(f"{target}({args})")
 
     def visit_Program(self, node):
         # Генератор переиспользуется между вызовами, поэтому начинаем заново.
@@ -92,6 +102,14 @@ class PythonCodeGenerator:
 
         args = node.args or [param.name for param in node.params]
         results = node.results
+
+        # Функция ({алг цел f}) возвращает значение через переменную "знач".
+        if node.return_type is not None:
+            value_key = fold_identifier('знач')
+            for result in results:
+                if fold_identifier(result) == value_key:
+                    self.var_types.setdefault(result, node.return_type)
+                    break
 
         # Алгоритм с аргументами/результатами оформляем как функцию:
         # её можно вызвать из следующей ячейки.
@@ -374,12 +392,23 @@ class PythonCodeGenerator:
             self.add_line(f"{var_name} = {expression}")
 
     def visit_OutputStatement(self, node):
+        # КуМир-семантика: ВЫВОД склеивает значения без разделителей и без
+        # автоматического перевода строки. Служебное имя «нс» в списке вывода
+        # печатает перевод строки (завершает текущую строку).
         parts = []
         for expr in node.expressions:
-            parts.append(self.generate(expr))
+            # «нс» — новая строка.
+            if isinstance(expr, Variable) and \
+                    fold_identifier(expr.name) == fold_identifier('нс'):
+                parts.append('"\\n"')
+            else:
+                parts.append(self.generate(expr))
 
-        output_str = ", ".join(parts)
-        self.add_line(f"print({output_str})")
+        if not parts:
+            self.add_line("print('')")
+            return
+        # sep='' — без разделителей; end='' — без авто-переноса (его даёт «нс»).
+        self.add_line(f"print({', '.join(parts)}, sep='', end='')")
 
     def visit_Variable(self, node):
         return node.name

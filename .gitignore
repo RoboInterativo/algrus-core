@@ -1,7 +1,10 @@
 venv
+venv*
+trash
+
 __pycache__
 .ipynb_checkpoints
-
+*.ipynb
 # Python
 __pycache__/
 *.py[cod]
@@ -24,6 +27,10 @@ ENV/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+
+# Расширение JupyterLab
+node_modules/
+extentions-src/*/labextension/
 
 # Тесты / покрытие
 .pytest_cache/

@@ -15,13 +15,14 @@ class Param(ASTNode):
 
 class Program(ASTNode):
     def __init__(self, name, declarations, statements,
-                 params=None, args=None, results=None):
+                 params=None, args=None, results=None, return_type=None):
         self.name = name
         self.declarations = declarations
         self.statements = statements
         self.params = params or []
         self.args = args or []
         self.results = results or []
+        self.return_type = return_type
 
     def __str__(self):
         return f"Program({self.name}, {self.params}, {self.args}, {self.results}, {self.declarations}, {self.statements})"
@@ -160,6 +161,13 @@ class FunctionCall(ASTNode):
 
     def __str__(self):
         return f"FunctionCall({self.name}, {self.arguments})"
+class ProcedureCall(ASTNode):
+    def __init__(self, name, arguments):
+        self.name = name
+        self.arguments = arguments
+
+    def __str__(self):
+        return f"ProcedureCall({self.name}, {self.arguments})"
 
 class Parser:
     TYPE_TOKENS = (
@@ -188,8 +196,19 @@ class Parser:
             self.error(f"Ожидался {token_type}, получен {self.current_token.type}")
 
     def program(self):
-        """program : АЛГ name (params)? (АРГ names)? (РЕЗ names)? НАЧ ... КОН."""
+        """program : АЛГ (тип)? name (params)? (АРГ names)? (РЕЗ names)? НАЧ ... КОН.
+
+        Необязательный ведущий тип — это тип результата функции:
+            алг цел факториал(цел n)   ->  алг ФАКТ(где выдаёт значение через "знач")
+        В этом случае алгоритм считается функцией, а значение возвращается
+        через служебную переменную "знач" (как в КуМире).
+        """
         self.eat(TokenType.АЛГ)
+
+        return_type = None
+        if self.current_token.type in self.TYPE_TOKENS:
+            return_type = self.current_token.type.name
+            self.eat(self.current_token.type)
 
         name_parts = []
         while self.current_token.type == TokenType.ИДЕНТ:
@@ -211,6 +230,12 @@ class Parser:
         if self.current_token.type == TokenType.РЕЗ:
             results = self.identifier_list(TokenType.РЕЗ)
 
+        # Функция с объявленным типом результата выдаёт значение через "знач".
+        if return_type is not None:
+            value_name = self.resolve_name('знач')
+            if value_name not in results:
+                results.append(value_name)
+
         self.eat(TokenType.НАЧ)
 
         declarations = self.declarations()
@@ -222,7 +247,8 @@ class Parser:
             self.eat(TokenType.ТОЧКА)
 
         return Program(program_name, declarations, statements,
-                       params=params, args=args, results=results)
+                       params=params, args=args, results=results,
+                       return_type=return_type)
 
     def parameter_list(self):
         """parameter_list : СКОБКА_ЛЕВ (type? ТАБ? ИДЕНТ bounds? (ЗАПЯТАЯ ...)*)? СКОБКА_ПРАВ"""
@@ -367,7 +393,6 @@ class Parser:
             return IndexAccess(name, self.index_indices())
 
         return Variable(name)
-
     def statements(self):
         """statements : (statement)*"""
         statements = []
@@ -385,19 +410,42 @@ class Parser:
                 break
             statements.append(self.statement())
 
-        return statements
-
+        return statements        
     def statement(self):
-        """statement : assignment | if_statement | while_statement | for_statement | input_statement | output_statement"""
+        """statement : assignment | procedure_call | ..."""
         token_type = self.current_token.type
 
         if token_type == TokenType.ИДЕНТ:
-            return self.assignment()
+            # Смотрим, что идет после имени
+            next_token = self.lexer.peek_token()
+
+            # Если после имени идет :=, = или [ — это присваивание
+            if next_token.type in (TokenType.ПРИСВОИТЬ, TokenType.РАВНО, TokenType.СКОБКА_КВ_ЛЕВ):
+                return self.assignment()
+
+            # Если после имени идет ( — это вызов функции/процедуры
+            if next_token.type == TokenType.СКОБКА_ЛЕВ:
+                name = self.resolve_name(self.current_token.value)
+                self.eat(TokenType.ИДЕНТ)
+                args = self.arguments()
+                self.optional_end()
+                return ProcedureCall(name, args)
+
+            # Если после имени идет ; или перенос строки — это вызов без аргументов
+            # (например, `вперед;`)
+            name = self.resolve_name(self.current_token.value)
+            self.eat(TokenType.ИДЕНТ)
+            args = []
+            self.optional_end()
+            return ProcedureCall(name, args)
+
         elif token_type == TokenType.ЕСЛИ:
             return self.if_statement()
         elif token_type == TokenType.ПОКА:
             return self.while_statement()
         elif token_type == TokenType.ДЛЯ:
+            return self.for_statement()
+        elif token_type == TokenType.НЦ:
             return self.for_statement()
         elif token_type == TokenType.ВВОД:
             return self.input_statement()
@@ -405,6 +453,25 @@ class Parser:
             return self.output_statement()
         else:
             self.error(f"Ожидался оператор, получен {token_type}")
+
+    # def statements(self):
+    #     """statements : (statement)*"""
+    #     statements = []
+    #
+    #     # Список токенов, которые означают конец блока операторов
+    #     end_tokens = {
+    #         TokenType.КОН, TokenType.КОН_ПОКА, TokenType.КОН_ДЛЯ,
+    #         TokenType.ВСЕ, TokenType.ИНАЧЕ, TokenType.КЦ,
+    #         TokenType.КОНЕЦ_ФАЙЛА
+    #     }
+    #
+    #     while self.current_token.type != TokenType.КОНЕЦ_ФАЙЛА:
+    #         self.optional_end()
+    #         if self.current_token.type in end_tokens:
+    #             break
+    #         statements.append(self.statement())
+    #
+    #     return statements
 
     def assignment(self):
         """assignment : lvalue (ПРИСВОИТЬ | РАВНО) expression (КОНЕЦ_СТРОКИ)?"""
@@ -457,7 +524,13 @@ class Parser:
         return WhileStatement(condition, body)
 
     def for_statement(self):
-        """for_statement : ДЛЯ идентификатор ОТ expression ДО expression (ШАГ expression)? ДЕЛАТЬ? (statements КОН_ДЛЯ | НЦ statements КЦ)"""
+        """for_statement : (НЦ)? ДЛЯ идентификатор ОТ expression ДО expression (ШАГ expression)? (statements КОН_ДЛЯ | НЦ statements КЦ)"""
+        # Допускаем две формы:
+        #   нц для i от 1 до 10 ... кц   (КуМир-стиль, НЦ идёт первым)
+        #   для i от 1 до 10 нц ... кц   (заголовок, затем НЦ)
+        lead_nts = self.current_token.type == TokenType.НЦ
+        if lead_nts:
+            self.eat(TokenType.НЦ)
         self.eat(TokenType.ДЛЯ)
         var_name = self.resolve_name(self.current_token.value)
         self.eat(TokenType.ИДЕНТ)
@@ -474,7 +547,11 @@ class Parser:
         if self.current_token.type == TokenType.ДЕЛАТЬ:
             self.eat(TokenType.ДЕЛАТЬ)
 
-        if self.current_token.type == TokenType.НЦ:
+        if lead_nts:
+            # Форма «нц для … … кц»: тело идёт сразу после заголовка.
+            body = self.statements()
+            self.eat(TokenType.КЦ)
+        elif self.current_token.type == TokenType.НЦ:
             self.eat(TokenType.НЦ)
             body = self.statements()
             self.eat(TokenType.КЦ)

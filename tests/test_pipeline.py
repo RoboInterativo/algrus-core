@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from algrus_core import Lexer, Parser, PythonCodeGenerator
 from algrus_core.kernel import AlgrusKernel, YourLanguageKernel, main as kernel_main
+from algrus_core.widgets.robot import RobotWidget
 
 
 PROGRAM = '''АЛГ Пример
@@ -92,8 +93,8 @@ class PipelineTest(unittest.TestCase):
 
         self.assertEqual(namespace['результат'], 20)
         text = output.getvalue()
-        self.assertIn('Итерация:  1', text)
-        self.assertIn('Результат:  20', text)
+        self.assertIn('Итерация: 1', text)
+        self.assertIn('Результат: 20', text)
 
     def test_logical_operators(self):
         code = compile_program(PROGRAM)
@@ -209,7 +210,7 @@ b = 3
         output = io.StringIO()
         with redirect_stdout(output):
             exec(compile(code, '<test>', 'exec'), namespace)
-        self.assertEqual(output.getvalue().splitlines(), ['9.0'] * 4)
+        self.assertEqual(output.getvalue().splitlines(), ['9.09.09.09.0'])
 
     def test_kumir_style_gcd(self):
         ast = Parser(Lexer(GCD_PROGRAM)).parse()
@@ -323,7 +324,7 @@ s := 0
         output = io.StringIO()
         with redirect_stdout(output):
             exec(compile(code, '<test>', 'exec'), namespace)
-        self.assertEqual(output.getvalue().splitlines(), ['1', '1.5', '2.0'])
+        self.assertEqual(output.getvalue().splitlines(), ['11.52.0'])
 
     def test_for_variable_step(self):
         code = compile_program('''АЛГ ПеременныйШаг
@@ -340,7 +341,7 @@ s := 0
         output = io.StringIO()
         with redirect_stdout(output):
             exec(compile(code, '<test>', 'exec'), namespace)
-        self.assertEqual(output.getvalue().splitlines(), ['2', '1.5', '1.0'])
+        self.assertEqual(output.getvalue().splitlines(), ['21.51.0'])
 
     def test_input_logical(self):
         code = compile_program('''АЛГ Логика
@@ -400,7 +401,7 @@ s := 0
         output = io.StringIO()
         with redirect_stdout(output):
             exec(compile(code, '<test>', 'exec'), namespace)
-        self.assertEqual(output.getvalue().splitlines(), ['-4', '512', '64'])
+        self.assertEqual(output.getvalue().splitlines(), ['-451264'])
 
     def test_alternative_string_quotes(self):
         code = compile_program('''АЛГ Кавычки
@@ -413,7 +414,62 @@ s := 0
         output = io.StringIO()
         with redirect_stdout(output):
             exec(compile(code, '<test>', 'exec'), namespace)
-        self.assertEqual(output.getvalue().splitlines(), ['привет', 'пока'])
+        self.assertEqual(output.getvalue().splitlines(), ['приветпока'])
+
+    def test_function_return_type_signoch(self):
+        # «алг цел фибоначчи(...)» — функция, возвращающая значение через «знач».
+        ast = Parser(Lexer('АЛГ цел фибоначчи(цел n)\nНАЧ\nзнач := 1\nКОН\n')).parse()
+        self.assertEqual(ast.return_type, 'ЦЕЛ')
+        self.assertEqual(ast.results, ['знач'])
+
+    def test_function_returns_value(self):
+        ns = self._run('''АЛГ цел фибоначчи(цел n)
+НАЧ
+  если n <= 2
+  то знач := 1
+  иначе знач := фибоначчи(n - 1) + фибоначчи(n - 2)
+  все
+КОН
+''')
+        self.assertEqual([ns['фибоначчи'](i) for i in range(1, 11)],
+                         [1, 1, 2, 3, 5, 8, 13, 21, 34, 55])
+
+    def test_kumir_ntl_for_and_ns_output(self):
+        # «нц для i от 1 до n … кц» и завершение строки через «нс».
+        ns = {}
+        exec(compile(compile_program('''АЛГ цел фибоначчи(цел n)
+НАЧ
+  если n <= 2
+  то знач := 1
+  иначе знач := фибоначчи(n - 1) + фибоначчи(n - 2)
+  все
+КОН
+'''), '<t1>', 'exec'), ns)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exec(compile(compile_program('''АЛГ вызов
+НАЧ
+  цел i
+  нц для i от 1 до 10
+    вывод фибоначчи(i), " "
+  кц
+  вывод нс
+КОН
+'''), '<t2>', 'exec'), ns)
+        self.assertEqual(output.getvalue(), '1 1 2 3 5 8 13 21 34 55 \n')
+
+    def _run(self, src):
+        code = compile_program(src)
+        ns = {}
+        exec(compile(code, '<test>', 'exec'), ns)
+        return ns
+
+    def _run_out(self, src):
+        ns = {}
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exec(compile(compile_program(src), '<test>', 'exec'), ns)
+        return output.getvalue()
 
 
 class KernelTest(unittest.TestCase):
@@ -443,7 +499,7 @@ class KernelTest(unittest.TestCase):
         self.assertEqual(first['status'], 'ok')
         self.assertEqual(second['status'], 'ok')
         self.assertEqual(self.kernel.user_ns['x'], 42)
-        self.assertEqual(self.sent[-1], ('stream', {'name': 'stdout', 'text': '42\n'}))
+        self.assertEqual(self.sent[-1], ('stream', {'name': 'stdout', 'text': '42'}))
 
     def test_silent_cell_does_not_send_output(self):
         result = self.kernel.do_execute(
@@ -495,7 +551,7 @@ class KernelTest(unittest.TestCase):
         self.assertEqual(result['status'], 'ok')
         self.assertEqual(prompts, ['Введите x: '])
         self.assertEqual(self.kernel.user_ns['x'], 7)
-        self.assertEqual(self.sent[-1], ('stream', {'name': 'stdout', 'text': '42\n'}))
+        self.assertEqual(self.sent[-1], ('stream', {'name': 'stdout', 'text': '42'}))
 
     def test_input_without_stdin_reports_clear_error(self):
         result = self.kernel.do_execute(
@@ -507,6 +563,130 @@ class KernelTest(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('ВВОД', result['evalue'])
         self.assertIn('stdin', result['evalue'])
+
+
+class RobotWidgetTest(unittest.TestCase):
+    def make_robot(self, *map_rows):
+        robot = RobotWidget(size=10, publish=lambda *args: None)
+        robot.step_delay = 0
+        robot.задать_карту(*map_rows)
+        return robot
+
+    def test_map_sets_dimensions_and_exit(self):
+        robot = self.make_robot('002')
+        self.assertEqual((robot.width, robot.height), (3, 1))
+        self.assertEqual(robot.walls, set())
+        self.assertEqual(robot.exit, (2, 0))
+
+    def test_relative_sensors(self):
+        robot = self.make_robot('002')
+
+        self.assertFalse(robot.на_выходе())
+        self.assertFalse(robot.впереди_свободно())   # вверх — за полем
+        self.assertTrue(robot.справа_свободно())     # вправо — (1, 0)
+        self.assertFalse(robot.слева_свободно())     # влево — за полем
+
+        robot.вправо()
+        robot.вперед()
+        self.assertEqual((robot.pos_x, robot.pos_y), (1, 0))
+        self.assertFalse(robot.на_выходе())
+
+        robot.вперед()
+        self.assertEqual((robot.pos_x, robot.pos_y), (2, 0))
+        self.assertTrue(robot.на_выходе())
+
+    def test_wall_blocks_sensor(self):
+        robot = self.make_robot('012')
+        self.assertFalse(robot.справа_свободно())  # (1, 0) — стена
+        robot.вправо()
+        self.assertFalse(robot.впереди_свободно())
+
+    def test_flood_fill_respects_walls(self):
+        robot = self.make_robot(
+            '00000',
+            '01110',
+            '01010',
+            '01110',
+            '00000',
+        )
+        self.assertEqual((robot.width, robot.height), (5, 5))
+
+        robot.залить()
+
+        self.assertIn((0, 0), robot.painted)
+        self.assertEqual(len(robot.painted), 16)
+        self.assertNotIn((2, 2), robot.painted)  # изолированная клетка
+
+    def test_find_exit_uses_shortest_path(self):
+        robot = self.make_robot(
+            '000',
+            '010',
+            '002',
+        )
+
+        robot.найти_выход()
+
+        self.assertEqual((robot.pos_x, robot.pos_y), (2, 2))
+        self.assertTrue(robot.на_выходе())
+
+    def test_find_exit_without_marker_raises(self):
+        robot = self.make_robot('000')
+        with self.assertRaises(RuntimeError):
+            robot.найти_выход()
+
+    def test_wall_follower_algorithm_reaches_exit(self):
+        kernel = AlgrusKernel()
+        kernel.iopub_socket = None
+        kernel.send_response = lambda *args, **kwargs: None
+
+        code = '''АЛГ Выход
+НАЧ
+  ЦЕЛ шаги;
+  шаги := 0;
+  карта("002");
+  ПОКА не на_выходе() и шаги < 10
+  НЦ
+    ЕСЛИ справа_свободно()
+    ТО
+      вправо();
+      вперед();
+    ИНАЧЕ
+      ЕСЛИ впереди_свободно()
+      ТО
+        вперед();
+      ИНАЧЕ
+        влево();
+      ВСЕ
+    ВСЕ
+    шаги := шаги + 1;
+  КЦ
+КОН.
+'''
+        with patch.object(RobotWidget, '_update', lambda self: self.show()):
+            result = kernel.do_execute(code, silent=True)
+
+        self.assertEqual(result['status'], 'ok', result.get('evalue'))
+        self.assertEqual((kernel.robot.pos_x, kernel.robot.pos_y), (2, 0))
+        self.assertTrue(kernel.robot.на_выходе())
+        self.assertEqual(kernel.user_ns['шаги'], 2)
+
+    def test_builtin_exit_solver_from_cell(self):
+        kernel = AlgrusKernel()
+        kernel.iopub_socket = None
+        kernel.send_response = lambda *args, **kwargs: None
+
+        code = '''АЛГ Выход
+НАЧ
+  карта("000", "010", "002");
+  найти_выход();
+КОН.
+'''
+        with patch.object(RobotWidget, '_update', lambda self: self.show()):
+            result = kernel.do_execute(code, silent=True)
+
+        self.assertEqual(result['status'], 'ok', result.get('evalue'))
+        self.assertEqual((kernel.robot.pos_x, kernel.robot.pos_y), (2, 2))
+        self.assertTrue(kernel.robot.на_выходе())
 
 
 if __name__ == '__main__':

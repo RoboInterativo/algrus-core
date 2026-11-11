@@ -4,19 +4,61 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "algrus-core"
-version = "0.1.0"
-description = "Russian Algorithmic Language — Jupyter kernel and runtime"
+version = "0.2.0"
+description = "Русский алгоритмический язык: Jupyter kernel + подсветка + кнопки"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Ваше Имя", email = "you@example.com"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Framework :: Jupyter",
+    "Natural Language :: Russian",
+    "Education",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
     "ipykernel>=6.0",
+    "jupyterlab>=4.0",
+    "jupyterlab-language-pack-ru-RU",   # русский интерфейс JupyterLab
 ]
 
 [project.optional-dependencies]
-gui = ["pygame>=2.5"]
-dev = ["pytest>=7.0"]
+robot = ["pygame>=2.5"]   # задел на будущее (не используется сейчас)
+dev = ["pytest>=7.0", "build", "twine", "jupyterlab"]
+# gui убрали — Pygame не нужен, робот в SVG
 
 [project.scripts]
 algrus = "algrus_core.kernel:main"
 
+# Ядро Jupyter — регистрируется автоматически
+[project.entry-points."ipykernel.kernelspec"]
+algrus = "algrus_core.kernel:AlgrusKernel"
+
+[project.urls]
+Homepage = "https://github.com/RoboInterativo/algrus-core"
+
+Repository = "https://github.com/RoboInterativo/algrus-core"
+
+
+# --- Пакеты Python ---
 [tool.setuptools.packages.find]
 include = ["algrus_core*"]
+
+# --- Data files: kernelspec + расширение ---
+[tool.setuptools.data-files]
+
+# kernelspec (на случай, если entry-point не сработает)
+"share/jupyter/kernels/algrus" = [
+    "kernelspec/kernel.json",
+
+]
+
+# prebuilt-расширение JupyterLab (static/ + package.json с jupyterlab._build)
+"share/jupyter/labextensions/algrus-symbols" = [
+    "algrus_core/labextension/package.json",
+]
+"share/jupyter/labextensions/algrus-symbols/static" = [
+    "algrus_core/labextension/static/*.js",
+    "algrus_core/labextension/static/*.js.map",
+]

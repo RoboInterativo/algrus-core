@@ -169,7 +169,13 @@ class Lexer:
             ':=': TokenType.ПРИСВОИТЬ,
             '^': TokenType.СТЕПЕНЬ
         }
-
+    def peek_token(self):
+        """Возвращает следующий токен, не сдвигая текущую позицию."""
+        pos, line, col, char = self.pos, self.line, self.column, self.current_char
+        token = self.get_next_token()
+        self.pos, self.line, self.column, self.current_char = pos, line, col, char
+        return token
+        
     def error(self, message):
         raise Exception(f'Лексическая ошибка: {message} в строке {self.line}, позиция {self.column}')
 

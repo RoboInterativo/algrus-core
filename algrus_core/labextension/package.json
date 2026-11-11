@@ -1,0 +1,33 @@
+{
+  "name": "algrus-symbols",
+  "version": "1.1.0",
+  "description": "Подсветка синтаксиса и кнопки со спецсимволами для АлгРус",
+  "keywords": [
+    "jupyter",
+    "jupyterlab-extension"
+  ],
+  "jupyterlab": {
+    "extension": true,
+    "outputDir": "labextension",
+    "_build": {
+      "load": "static/remoteEntry.517361470f1e971bcd8b.js",
+      "extension": "./extension"
+    }
+  },
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "jupyter labextension build .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@jupyterlab/builder": "^4.4.10"
+  },
+  "dependencies": {
+    "@codemirror/language": "^6.13.1",
+    "@jupyterlab/codemirror": "^4.4.0",
+    "@lumino/widgets": "^2.10.0"
+  }
+}
