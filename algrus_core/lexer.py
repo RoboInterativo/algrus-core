@@ -49,6 +49,8 @@ class TokenType(Enum):
     МИНУС = 'МИНУС'
     УМНОЖИТЬ = 'УМНОЖИТЬ'
     РАЗДЕЛИТЬ = 'РАЗДЕЛИТЬ'
+    MOD = 'MOD'
+    DIV = 'DIV'
     РАВНО = 'РАВНО'
     НЕ_РАВНО = 'НЕ_РАВНО'
     БОЛЬШЕ = 'БОЛЬШЕ'
@@ -148,7 +150,9 @@ class Lexer:
             'ЛОЖЬ': TokenType.ЛОЖЬ,
             'И': TokenType.И,
             'ИЛИ': TokenType.ИЛИ,
-            'НЕ': TokenType.НЕ
+            'НЕ': TokenType.НЕ,
+            'MOD': TokenType.MOD,
+            'DIV': TokenType.DIV
         }
 
         # Операторы

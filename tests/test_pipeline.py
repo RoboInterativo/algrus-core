@@ -403,6 +403,36 @@ s := 0
             exec(compile(code, '<test>', 'exec'), namespace)
         self.assertEqual(output.getvalue().splitlines(), ['-451264'])
 
+    def test_mod_and_div_operators(self):
+        code = compile_program('''АЛГ Остаток
+НАЧ
+  ВЫВОД 17 mod 5, " ", 17 div 5
+КОН
+''')
+        namespace = {}
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exec(compile(code, '<test>', 'exec'), namespace)
+        self.assertEqual(output.getvalue(), '2 3')
+
+    def test_parenthesized_conditions(self):
+        code = compile_program('''АЛГ Условия
+НАЧ
+  ЦЕЛ i, j, счётчик;
+  счётчик := 0;
+  для i от 1 до 4 делать
+    для j от 1 до 4 делать
+      ЕСЛИ (i mod 2 <> 0) И (j < 3) ТО
+        счётчик := счётчик + 1;
+      ВСЕ;
+    кон_для;
+  кон_для;
+КОН
+''')
+        namespace = {}
+        exec(compile(code, '<test>', 'exec'), namespace)
+        self.assertEqual(namespace['счётчик'], 4)
+
     def test_alternative_string_quotes(self):
         code = compile_program('''АЛГ Кавычки
 НАЧ
@@ -669,6 +699,40 @@ class RobotWidgetTest(unittest.TestCase):
         self.assertEqual((kernel.robot.pos_x, kernel.robot.pos_y), (2, 0))
         self.assertTrue(kernel.robot.на_выходе())
         self.assertEqual(kernel.user_ns['шаги'], 2)
+
+    def test_snake_paints_whole_field(self):
+        kernel = AlgrusKernel()
+        kernel.iopub_socket = None
+        kernel.send_response = lambda *args, **kwargs: None
+
+        code = '''АЛГ Змейка_10x10
+НАЧ
+  ЦЕЛ i, j;
+  вправо;
+  для i от 1 до 10 делать
+    для j от 1 до 10 делать
+      закрасить;
+      ЕСЛИ j < 10 ТО
+        вперед;
+      ВСЕ;
+    кон_для;
+    ЕСЛИ i < 10 ТО
+      ЕСЛИ i mod 2 <> 0 ТО
+        вправо; вперед; вправо;
+      ИНАЧЕ
+        влево; вперед; влево;
+      ВСЕ;
+    ВСЕ;
+  кон_для;
+КОН.
+'''
+        with patch.object(RobotWidget, '_update', lambda self: self.show()):
+            result = kernel.do_execute(code, silent=True)
+
+        self.assertEqual(result['status'], 'ok', result.get('evalue'))
+        self.assertEqual(len(kernel.robot.painted), 100)
+        self.assertEqual(kernel.robot.painted,
+                         {(x, y) for x in range(10) for y in range(10)})
 
     def test_builtin_exit_solver_from_cell(self):
         kernel = AlgrusKernel()

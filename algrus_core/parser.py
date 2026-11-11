@@ -644,10 +644,12 @@ class Parser:
         return node
 
     def term(self):
-        """term : factor ((УМНОЖИТЬ | РАЗДЕЛИТЬ) factor)*"""
+        """term : factor ((УМНОЖИТЬ | РАЗДЕЛИТЬ | MOD | DIV) factor)*"""
         node = self.factor()
 
-        while self.current_token.type in (TokenType.УМНОЖИТЬ, TokenType.РАЗДЕЛИТЬ):
+        while self.current_token.type in (
+                TokenType.УМНОЖИТЬ, TokenType.РАЗДЕЛИТЬ,
+                TokenType.MOD, TokenType.DIV):
             op = self.current_token
             self.eat(self.current_token.type)
             node = BinaryOp(node, op, self.factor())
@@ -678,7 +680,7 @@ class Parser:
         """primary : ЧИСЛО | ВЕЩ_ЧИСЛО | СТРОКА | ИСТИНА | ЛОЖЬ
                    | идентификатор (СКОБКА_КВ_ЛЕВ indices СКОБКА_КВ_ПРАВ)?
                    | идентификатор СКОБКА_ЛЕВ arguments СКОБКА_ПРАВ
-                   | СКОБКА_ЛЕВ expression СКОБКА_ПРАВ
+                   | СКОБКА_ЛЕВ condition СКОБКА_ПРАВ
         """
         token = self.current_token
 
@@ -707,7 +709,9 @@ class Parser:
             return Variable(name)
         elif token.type == TokenType.СКОБКА_ЛЕВ:
             self.eat(TokenType.СКОБКА_ЛЕВ)
-            node = self.expression()
+            # В скобках может стоять не только арифметическое выражение,
+            # но и условие: (i mod 2 <> 0) И (j < 10).
+            node = self.condition()
             self.eat(TokenType.СКОБКА_ПРАВ)
             return node
         else:
